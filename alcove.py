@@ -117,32 +117,40 @@ def HingeLoss(output, target):
     hinge_loss[hinge_loss < 0] = 0.
     return torch.sum(hinge_loss)
 
-def train(mytype,num_epochs,loss_type,track_inc=5,verbose_params=True):
+def train(mytype,num_epochs,loss_type,data_type,track_inc=5,verbose_params=False):
 	# Train model on a SHJ problem
 	# 
 	# Input
 	#   mytype : type 1...6 allowed
 	#   num_epochs : number of passes through exemplar set
 	#   loss_type : either 'll' or 'hinge'
+	# 	data_type : 'abstract' (binary representation) or 'images' (pixels)
 	#	track_inc : track loss/output at these intervals
 	#   verbose_params : print parameters when you are done
 	#
 	# Output
 	#    trackers for epoch index, probability of right response, accuracy, and loss
 	#    each is a list with the same length
-	exemplars,labels,ncat = load_data(mytype,loss_type) # [n_exemplars x dim tensor],[n_exemplars tensor]
+	print('Training on type ' + str(mytype))
+	if data_type == 'abstract':
+		exemplars,labels,ncat = load_data_abstract(mytype,loss_type) # [n_exemplars x dim tensor],[n_exemplars tensor]		
+	elif data_type == 'images':
+		exemplars,labels,ncat = load_data_img(mytype,loss_type) # [n_exemplars x dim tensor],[n_exemplars tensor]
+	else:
+		assert False
+
 	n_exemplars = exemplars.size(0)
+	dim = exemplars.size(1)
 	net = ALCOVE(exemplars)
+	print( "  with " + str(dim) + " stimulus dimensions")
 
 	if loss_type == 'll':
 		loss = torch.nn.BCEWithLogitsLoss(reduction='sum')
 	elif loss_type == 'hinge':
 		loss = HingeLoss
-		# loss = lambda y_pred, y: torch.sum(torch.max(1-y*y_pred,0)[0])
 	else:
 		assert False # undefined loss
 	
-	# optimizer = optim.SGD(params=net.parameters(),lr=0.01)
 	optimizer = optim.SGD([ {'params': net.w.parameters()}, {'params' : [net.attn], 'lr':lr_attn}], lr=lr_association)
 	v_epoch = []
 	v_loss = []
@@ -166,7 +174,7 @@ def train(mytype,num_epochs,loss_type,track_inc=5,verbose_params=True):
 
 	return v_epoch,v_prob,v_acc,v_loss
 
-def load_data(mytype,loss_type):
+def load_data_abstract(mytype,loss_type):
 	# Loads SHJ data from text file
 	# 
 	# Input
@@ -188,10 +196,38 @@ def load_data(mytype,loss_type):
 	y = torch.tensor(y).float()
 	return X,y,ncat
 
+def load_data_img(mytype,loss_type):
+	# Loads SHJ data from images
+	# 
+	# Input
+	#   mytype : type 1 through 6 as integer
+	#
+	# Output
+	#   X : [ne x dim tensor] stimuli as rows
+	#   Y : [ne tensor] labels (-1 or 1)
+	assert(mytype >= 1 and mytype <= 6)
+	from convnet_feat import get_features
+	print(" Passing images through ConvNet...")
+	stimuli,images = get_features('data','resnet18')
+	# stimuli,images = get_features('data','vgg11')
+	print(" Done.")
+	stimuli = stimuli.data.numpy()
+	labels = pd.read_csv('data/shj_labels.txt', header=None).to_numpy()
+	stimuli = stimuli.astype(float)
+	labels_float = np.zeros(labels.shape,dtype=float)
+	labels_float[labels == 'A'] = POSITIVE
+	labels_float[labels == 'B'] = NEGATIVE
+	ncat = np.unique(labels_float).size
+	y = labels_float[mytype-1,:].flatten()
+	X = torch.tensor(stimuli).float()
+	y = torch.tensor(y).float()
+	return X,y,ncat
+
 if __name__ == "__main__":
 
-	num_epochs = 50 # number of passes through exemplars
-	loss_type = 'hinge' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
+	num_epochs = 200 # number of passes through exemplars
+	data_type = 'images' # 'abstract' (binary representation) or 'images' (pixels)
+	loss_type = 'll' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
 	lr_association = 0.03 # learning rate for association weights
 	lr_attn = 0.0033 # learning rate for attention weights	
 
@@ -207,21 +243,21 @@ if __name__ == "__main__":
 	# Run ALCOVE on each SHJ problem
 	tracker = []
 	for mytype in range(1,7): # from type I to type VI
-		print('Training on type ' + str(mytype))		
-		v_epoch,v_prob,v_acc,v_loss = train(mytype,num_epochs,loss_type)
+			
+		v_epoch,v_prob,v_acc,v_loss = train(mytype,num_epochs,loss_type,data_type)
 		tracker.append((v_epoch,v_prob,v_acc,v_loss))		
 		print("")
 
 	plt.figure(1)
-	for v in tracker:
-		plt.plot(v[0],v[1])
+	for i,v in enumerate(tracker):
+		plt.plot(v[0],v[1],linewidth=4./(i+1))
 	plt.xlabel('epoch')
 	plt.ylabel('Probability correct')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
 	
 	plt.figure(2)
-	for v in tracker:
-		plt.plot(v[0],v[3])
+	for i,v in enumerate(tracker):
+		plt.plot(v[0],v[3],linewidth=4./(i+1))
 	plt.xlabel('epoch')
 	plt.ylabel('loss')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
