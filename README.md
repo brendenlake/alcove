@@ -7,5 +7,7 @@ The main script runs ALCOVE on the 6 category learning problems of  Shephard, Ho
 There are a few modifications to Kruschke's original ALCOVE:
 
 The original ALCOVE is modified as follows:
-- With just two classes, we use only a single sigmoid output unit
-- The original loss function has been replaced with either a maximum likelihood objective ("ll") or a hinge loss, which is a variant of the humble teacher used by Kruschke ("hinge")
+- With just two classes, we use only a single sigmoid output unit, instead of using a multi-class softmax output.
+- Kruschke's original loss function has been replaced with either a maximum likelihood objective ("ll") or a hinge loss, which is a variant of the humble teacher used by Kruschke ("hinge")
+
+![learning curve](figure/SHJ.png)

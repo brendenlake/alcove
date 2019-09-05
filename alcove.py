@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 #
 # PyTorch implementation of
 #  	ALCOVE: An exemplar-based connectionist model of category learning (Kruschke, 1992)
-#
+
 #   Main script runs ALCOVE on stimuli of Shephard, Hovland, and Jenkins (1961)
-#
+
 #  There are a few modifications to Kruschke's original ALCOVE:
 #    - with two classes, there is only one binary output
 #    - rather the using Kruschke's loss, there are options to maximize
 #    the log-likelihood directly (ll loss) or a version of the humble teacher (hinge loss)
-#
+
 class ALCOVE(nn.Module):
 
 	def __init__(self, exemplars, c=6.5, phi=2.0):
