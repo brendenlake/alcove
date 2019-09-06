@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt    
+from data_loader import get_label_coding,load_shj_abstract,load_shj_images
 
 #
 # PyTorch implementation of
@@ -117,32 +117,22 @@ def HingeLoss(output, target):
     hinge_loss[hinge_loss < 0] = 0.
     return torch.sum(hinge_loss)
 
-def train(mytype,num_epochs,loss_type,data_type,track_inc=5,verbose_params=False):
+def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False):
 	# Train model on a SHJ problem
 	# 
 	# Input
-	#   mytype : type 1...6 allowed
+	#   exemplars : [n_exemplars x dim tensor] rows are exemplars
+	#   labels : [n_exemplars tensor] category labels	
 	#   num_epochs : number of passes through exemplar set
 	#   loss_type : either 'll' or 'hinge'
-	# 	data_type : 'abstract' (binary representation) or 'images' (pixels)
 	#	track_inc : track loss/output at these intervals
 	#   verbose_params : print parameters when you are done
 	#
 	# Output
 	#    trackers for epoch index, probability of right response, accuracy, and loss
 	#    each is a list with the same length
-	print('Training on type ' + str(mytype))
-	if data_type == 'abstract':
-		exemplars,labels,ncat = load_data_abstract(mytype,loss_type) # [n_exemplars x dim tensor],[n_exemplars tensor]		
-	elif data_type == 'images':
-		exemplars,labels,ncat = load_data_img(mytype,loss_type) # [n_exemplars x dim tensor],[n_exemplars tensor]
-	else:
-		assert False
-
 	n_exemplars = exemplars.size(0)
-	dim = exemplars.size(1)
 	net = ALCOVE(exemplars)
-	print( "  with " + str(dim) + " stimulus dimensions")
 
 	if loss_type == 'll':
 		loss = torch.nn.BCEWithLogitsLoss(reduction='sum')
@@ -174,55 +164,6 @@ def train(mytype,num_epochs,loss_type,data_type,track_inc=5,verbose_params=False
 
 	return v_epoch,v_prob,v_acc,v_loss
 
-def load_data_abstract(mytype,loss_type):
-	# Loads SHJ data from text file
-	# 
-	# Input
-	#   mytype : type 1 through 6 as integer
-	#
-	# Output
-	#   X : [ne x dim tensor] stimuli as rows
-	#   Y : [ne tensor] labels (-1 or 1)
-	assert(mytype >= 1 and mytype <= 6)
-	stimuli = pd.read_csv('data/shj_stimuli.txt', header=None).to_numpy()
-	labels = pd.read_csv('data/shj_labels.txt', header=None).to_numpy()
-	stimuli = stimuli.astype(float)
-	labels_float = np.zeros(labels.shape,dtype=float)
-	labels_float[labels == 'A'] = POSITIVE
-	labels_float[labels == 'B'] = NEGATIVE
-	ncat = np.unique(labels_float).size
-	y = labels_float[mytype-1,:].flatten()
-	X = torch.tensor(stimuli).float()
-	y = torch.tensor(y).float()
-	return X,y,ncat
-
-def load_data_img(mytype,loss_type):
-	# Loads SHJ data from images
-	# 
-	# Input
-	#   mytype : type 1 through 6 as integer
-	#
-	# Output
-	#   X : [ne x dim tensor] stimuli as rows
-	#   Y : [ne tensor] labels (-1 or 1)
-	assert(mytype >= 1 and mytype <= 6)
-	from convnet_feat import get_features
-	print(" Passing images through ConvNet...")
-	stimuli,images = get_features('data','resnet18')
-	# stimuli,images = get_features('data','vgg11')
-	print(" Done.")
-	stimuli = stimuli.data.numpy()
-	labels = pd.read_csv('data/shj_labels.txt', header=None).to_numpy()
-	stimuli = stimuli.astype(float)
-	labels_float = np.zeros(labels.shape,dtype=float)
-	labels_float[labels == 'A'] = POSITIVE
-	labels_float[labels == 'B'] = NEGATIVE
-	ncat = np.unique(labels_float).size
-	y = labels_float[mytype-1,:].flatten()
-	X = torch.tensor(stimuli).float()
-	y = torch.tensor(y).float()
-	return X,y,ncat
-
 if __name__ == "__main__":
 
 	num_epochs = 200 # number of passes through exemplars
@@ -231,20 +172,22 @@ if __name__ == "__main__":
 	lr_association = 0.03 # learning rate for association weights
 	lr_attn = 0.0033 # learning rate for attention weights	
 
-	# Set coding for class A and class B
-	POSITIVE = 1.
-	if loss_type == 'hinge':
-		NEGATIVE = -1.
-	elif loss_type == 'll':
-		NEGATIVE = 0.
+	POSITIVE,NEGATIVE = get_label_coding(loss_type)
+	if data_type == 'abstract':
+		exemplars,labels_by_type = load_shj_abstract(loss_type) # [n_exemplars x dim tensor],list of [n_exemplars tensor]		
+	elif data_type == 'images':
+		exemplars,labels_by_type = load_shj_images(loss_type) # [n_exemplars x dim tensor],list of [n_exemplars tensor]
 	else:
 		assert False
+	dim = exemplars.size(1)
+	print("Data loaded with " + str(dim) + " dimensions.")
 
 	# Run ALCOVE on each SHJ problem
 	tracker = []
 	for mytype in range(1,7): # from type I to type VI
-			
-		v_epoch,v_prob,v_acc,v_loss = train(mytype,num_epochs,loss_type,data_type)
+		print('Training on type ' + str(mytype))
+		labels = labels_by_type[mytype-1]
+		v_epoch,v_prob,v_acc,v_loss = train(exemplars,labels,num_epochs,loss_type)
 		tracker.append((v_epoch,v_prob,v_acc,v_loss))		
 		print("")
 
