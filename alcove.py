@@ -3,7 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt    
+from itertools import permutations
 from data_loader import get_label_coding,load_shj_abstract,load_shj_images
+from scipy.stats import sem
 
 #
 # PyTorch implementation of
@@ -18,7 +20,7 @@ from data_loader import get_label_coding,load_shj_abstract,load_shj_images
 
 class ALCOVE(nn.Module):
 
-	def __init__(self, exemplars, c=6.5, phi=2.0):
+	def __init__(self, exemplars, c=6.5, phi=2.5):
 		# Input
 		#   exemplars: [ne x dim] rows are exemplars provided to model
 		super(ALCOVE, self).__init__()
@@ -166,41 +168,67 @@ def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False
 
 if __name__ == "__main__":
 
-	num_epochs = 200 # number of passes through exemplars
-	data_type = 'images' # 'abstract' (binary representation) or 'images' (pixels)
-	loss_type = 'll' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
+	num_epochs = 50 # number of passes through exemplars
+	data_type = 'abstract' # 'abstract' (binary representation) or 'images' (pixels)
+	loss_type = 'hinge' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
 	lr_association = 0.03 # learning rate for association weights
-	lr_attn = 0.0033 # learning rate for attention weights	
+	lr_attn = 0.0033 # learning rate for attention weights
+	ntype = 6 # number of types in SHJ
+	viz_se = False # visualize standard error in plot
 
 	POSITIVE,NEGATIVE = get_label_coding(loss_type)
 	if data_type == 'abstract':
-		exemplars,labels_by_type = load_shj_abstract(loss_type) # [n_exemplars x dim tensor],list of [n_exemplars tensor]		
+		list_perms = [(0,1,2)]
+		list_exemplars = []
+		for p in list_perms:
+			exemplars,labels_by_type = load_shj_abstract(loss_type,p) 
+				# [n_exemplars x dim tensor],list of [n_exemplars tensor]		
+			list_exemplars.append(exemplars)
 	elif data_type == 'images':
-		exemplars,labels_by_type = load_shj_images(loss_type) # [n_exemplars x dim tensor],list of [n_exemplars tensor]
+		list_perms = list(permutations([0,1,2])) # ways of assigning abstract dimensions to visual ones
+		list_exemplars = []
+		for p in list_perms:
+			exemplars,labels_by_type = load_shj_images(loss_type,p)
+				# [n_exemplars x dim tensor],list of [n_exemplars tensor]
+			list_exemplars.append(exemplars)
 	else:
 		assert False
-	dim = exemplars.size(1)
+	dim = list_exemplars[0].size(1)
 	print("Data loaded with " + str(dim) + " dimensions.")
 
 	# Run ALCOVE on each SHJ problem
-	tracker = []
-	for mytype in range(1,7): # from type I to type VI
-		print('Training on type ' + str(mytype))
-		labels = labels_by_type[mytype-1]
-		v_epoch,v_prob,v_acc,v_loss = train(exemplars,labels,num_epochs,loss_type)
-		tracker.append((v_epoch,v_prob,v_acc,v_loss))		
-		print("")
+	list_trackers = []
+	for pidx,exemplars in enumerate(list_exemplars): # all permutations of stimulus dimensions
+		tracker = []
+		print('Permutation ' + str(pidx))
+		for mytype in range(1,ntype+1): # from type I to type VI
+			print('  Training on type ' + str(mytype))
+			labels = labels_by_type[mytype-1]
+			v_epoch,v_prob,v_acc,v_loss = train(exemplars,labels,num_epochs,loss_type)
+			tracker.append((v_epoch,v_prob,v_acc,v_loss))
+			print("")
+		list_trackers.append(tracker)
+
+	A = np.array(list_trackers) # nperms x ntype x 4 tracker types x n_iters
+	M = np.mean(A,axis=0) # ntype x 4 tracker types x n_iters
+	SE = sem(A,axis=0) # ntype x 4 tracker types x n_iters
 
 	plt.figure(1)
-	for i,v in enumerate(tracker):
-		plt.plot(v[0],v[1],linewidth=4./(i+1))
+	for i in range(ntype): 
+		if viz_se:
+			plt.errorbar(M[i,0,:],M[i,1,:],yerr=SE[i,1,:],linewidth=4./(i+1))
+		else:
+			plt.plot(M[i,0,:],M[i,1,:],linewidth=4./(i+1))
 	plt.xlabel('epoch')
 	plt.ylabel('Probability correct')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
 	
 	plt.figure(2)
-	for i,v in enumerate(tracker):
-		plt.plot(v[0],v[3],linewidth=4./(i+1))
+	for i in range(ntype):
+		if viz_se:
+			plt.errorbar(M[i,0,:],M[i,3,:],yerr=SE[i,3,:],linewidth=4./(i+1))  # v is [tracker type x n_iters]
+		else:
+			plt.plot(M[i,0,:],M[i,3,:],linewidth=4./(i+1))  # v is [tracker type x n_iters]
 	plt.xlabel('epoch')
 	plt.ylabel('loss')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
