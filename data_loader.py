@@ -86,7 +86,7 @@ def load_shj_abstract(loss_type, perm=[0,1,2]):
 	X = X[perm_idx,:] # permute items from original order to permuted order
 	return X,y_list
 
-def load_shj_images(loss_type, perm=[0,1,2], viz_cats=False):
+def load_shj_images(loss_type, perm=[0,1,2], viz_cats=True):
 	# Loads SHJ data from images
 	# 
 	# Input
@@ -127,6 +127,7 @@ def load_shj_images(loss_type, perm=[0,1,2], viz_cats=False):
 				ax = plt.subplot(2, 4, 5+j)
 				ax.axis('off')
 				imshow(images_B[j])
+			# plt.savefig(str(mytype) + '.pdf')
 		plt.show()
 
 	return X,y_list

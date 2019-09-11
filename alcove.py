@@ -60,7 +60,34 @@ class ALCOVE(nn.Module):
 		# compute the output response
 		output = self.w(hidden).view(-1) # tensor scalar
 		prob = torch.sigmoid(self.phi*output) # tensor scalar
-		return output,prob 
+		return output,prob
+
+class MLP(nn.Module):
+
+	def __init__(self, nhid=8, phi=2.0):
+		# Input
+		#   exemplars: [ne x dim] rows are exemplars provided to model
+		super(MLP, self).__init__()
+		self.ne = exemplars.size(0) # number of exemplars
+		self.dim = exemplars.size(1) # stimulus dimension
+		self.nhid = nhid
+		self.hid = torch.nn.Linear(self.dim,self.nhid)
+		self.out = torch.nn.Linear(self.nhid,1)
+		self.phi = phi
+
+	def forward(self,x):
+		# Input
+		#  x: [dim tensor] a single stimulus
+		#
+		# Output
+		#  output : [tensor scalar] unnormalized log-score (before sigmoid)
+		#  prob : [tensor scalar] sigmoid output
+		x = x.view(1,-1) # dim x 1
+		x = self.hid(x)
+		x = torch.tanh(x)
+		output = self.out(x)
+		prob = torch.sigmoid(self.phi*output) # tensor scalar
+		return output,prob
 
 def update_batch(net,exemplars,targets,loss,optimizer):
 	# Update the weights using batch SGD for the entire set of exemplars
@@ -79,7 +106,8 @@ def update_batch(net,exemplars,targets,loss,optimizer):
 	myloss = loss(out, targets)
 	myloss.backward()
 	optimizer.step()
-	net.attn.data = torch.clamp(net.attn.data, min=0.) # ensure attention is non-negative
+	if model_type == 'alcove':
+		net.attn.data = torch.clamp(net.attn.data, min=0.) # ensure attention is non-negative
 	return myloss.cpu().item()
 
 def evaluate(net,exemplars,targets):
@@ -134,7 +162,13 @@ def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False
 	#    trackers for epoch index, probability of right response, accuracy, and loss
 	#    each is a list with the same length
 	n_exemplars = exemplars.size(0)
-	net = ALCOVE(exemplars)
+	
+	if model_type == 'mlp':
+		net = MLP()
+	elif model_type == 'alcove':
+		net = ALCOVE(exemplars)
+	else:
+		assert False
 
 	if loss_type == 'll':
 		loss = torch.nn.BCEWithLogitsLoss(reduction='sum')
@@ -143,7 +177,10 @@ def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False
 	else:
 		assert False # undefined loss
 	
-	optimizer = optim.SGD([ {'params': net.w.parameters()}, {'params' : [net.attn], 'lr':lr_attn}], lr=lr_association)
+	optimizer = optim.SGD(net.parameters(), lr=lr_association)
+	if model_type == 'alcove':
+		optimizer = optim.SGD([ {'params': net.w.parameters()}, {'params' : [net.attn], 'lr':lr_attn}], lr=lr_association)
+
 	v_epoch = []
 	v_loss = []
 	v_acc = []
@@ -158,19 +195,21 @@ def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False
 			v_prob.append(test_prob)
 			print('  epoch ' + str(epoch) + "; train loss " + str(round(v_loss[-1],4)))
 
-	if verbose_params:
+	if model_type == 'alcove' and verbose_params:
 		print("Attention weights:")
-		print(np.transpose(net.attn.data.numpy()))
+		print(np.transpose(np.round(net.attn.data.numpy(),3)))
 		print("Category associations:")
-		print(net.w.weight.data.numpy())
+		print(np.round(net.w.weight.data.numpy(),3))
+
 
 	return v_epoch,v_prob,v_acc,v_loss
 
 if __name__ == "__main__":
 
-	num_epochs = 50 # number of passes through exemplars
+	num_epochs = 200 # number of passes through exemplars
+	model_type = 'alcove' # 'alcove' or 'mlp'
 	data_type = 'abstract' # 'abstract' (binary representation) or 'images' (pixels)
-	loss_type = 'hinge' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
+	loss_type = 'll' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
 	lr_association = 0.03 # learning rate for association weights
 	lr_attn = 0.0033 # learning rate for attention weights
 	ntype = 6 # number of types in SHJ
@@ -216,11 +255,11 @@ if __name__ == "__main__":
 	plt.figure(1)
 	for i in range(ntype): 
 		if viz_se:
-			plt.errorbar(M[i,0,:],M[i,1,:],yerr=SE[i,1,:],linewidth=4./(i+1))
+			plt.errorbar(M[i,0,:],1-M[i,1,:],yerr=SE[i,1,:],linewidth=4./(i+1))
 		else:
-			plt.plot(M[i,0,:],M[i,1,:],linewidth=4./(i+1))
-	plt.xlabel('epoch')
-	plt.ylabel('Probability correct')
+			plt.plot(M[i,0,:],1-M[i,1,:],linewidth=4./(i+1))
+	plt.xlabel('Block')
+	plt.ylabel('Probability of error')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
 	
 	plt.figure(2)
