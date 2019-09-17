@@ -255,11 +255,11 @@ if __name__ == "__main__":
 	plt.figure(1)
 	for i in range(ntype): 
 		if viz_se:
-			plt.errorbar(M[i,0,:],1-M[i,1,:],yerr=SE[i,1,:],linewidth=4./(i+1))
+			plt.errorbar(M[i,0,:],M[i,1,:],yerr=SE[i,1,:],linewidth=4./(i+1))
 		else:
-			plt.plot(M[i,0,:],1-M[i,1,:],linewidth=4./(i+1))
+			plt.plot(M[i,0,:],M[i,1,:],linewidth=4./(i+1))
 	plt.xlabel('Block')
-	plt.ylabel('Probability of error')
+	plt.ylabel('Probability correct')
 	plt.legend(["Type " + str(s) for s in range(1,7)])
 	
 	plt.figure(2)

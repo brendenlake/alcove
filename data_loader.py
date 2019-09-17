@@ -50,9 +50,11 @@ def load_shj(loss_type):
 def process_shj_images():
 	# Return
 	#  X : [ne x dim tensor] stimuli as rows
+	mydir = 'data/shj_images_set1'
+	# mydir = 'data/shj_images_set2'
 	print(" Passing SHJ images through ConvNet...")
-	# stimuli,images = get_features('data','vgg11')
-	stimuli,images = get_features('data','resnet18')
+	# stimuli,images = get_features(mydir,'vgg11')
+	stimuli,images = get_features(mydir,'resnet18')
 
 	print(" Done.")
 	stimuli = stimuli.cpu().data.numpy().astype(float)
@@ -86,7 +88,7 @@ def load_shj_abstract(loss_type, perm=[0,1,2]):
 	X = X[perm_idx,:] # permute items from original order to permuted order
 	return X,y_list
 
-def load_shj_images(loss_type, perm=[0,1,2], viz_cats=True):
+def load_shj_images(loss_type, perm=[0,1,2], viz_cats=False):
 	# Loads SHJ data from images
 	# 
 	# Input
