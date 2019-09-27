@@ -206,10 +206,10 @@ def train(exemplars,labels,num_epochs,loss_type,track_inc=5,verbose_params=False
 
 if __name__ == "__main__":
 
-	num_epochs = 200 # number of passes through exemplars
+	num_epochs = 50 # number of passes through exemplars
 	model_type = 'alcove' # 'alcove' or 'mlp'
 	data_type = 'abstract' # 'abstract' (binary representation) or 'images' (pixels)
-	loss_type = 'll' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
+	loss_type = 'hinge' # 'll' (log-likelihood) or 'hinge' (version of humble teacher)
 	lr_association = 0.03 # learning rate for association weights
 	lr_attn = 0.0033 # learning rate for attention weights
 	ntype = 6 # number of types in SHJ
